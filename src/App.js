@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const tempMovieData = [
   {
@@ -47,31 +47,102 @@ const tempWatchedData = [
   },
 ];
 
+const KEY = 'b2bb918e';
+
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
 
 export default function App() {
-  const [movies, setMovies] = useState(tempMovieData);
-  const [watched, setWatched] = useState(tempWatchedData);
+  const [query, setQuery] = useState("");
+  const [movies, setMovies] = useState([]);
+  const [watched, setWatched] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('')
+  const [selectedId, setSelectedId] = useState(null);
+
+  // useEffect(function() {
+  //   console.log('A');
+  // }, [])
+
+  // useEffect(function() {
+  //   console.log('B');
+  // })
+
+  // console.log('C');
+
+  function handleSelectMovie(id) {
+    setSelectedId(selectedId => id === selectedId ? null : id);
+  }
+
+  function handleCloseMovie() {
+    setSelectedId(null);
+  }
+
+  useEffect(function() {
+    async function fetchMovies() {
+      try {
+        setIsLoading(true);
+        setError('');
+        const res = await fetch(`http://www.omdbapi.com/?apikey=${KEY}&s=${query}`);
+  
+        if (!res.ok) throw new Error("Something went wrong with fetching movies.");
+
+        const data = await res.json();
+
+        if (data.Response === 'False') throw new Error("Movie not found");
+
+        setMovies(data.Search);
+        setIsLoading(false); 
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (query.length < 3) {
+      setMovies([]);
+      setError('');
+      return;
+    }
+    fetchMovies();
+  }, [query])
 
   return (
     <>
       <NavBar>
         <Logo />
-        <Search />
+        <Search query={query} setQuery={setQuery} />
         <NumResults movies={movies} />
       </NavBar>
       <Main>
         <Box>
-          <MovieList movies={movies} />
+           {isLoading && <Loader/>}
+           {!isLoading && !error && <MovieList movies={movies} onSelectMovie={handleSelectMovie} />}
+           {error && <ErrorMessage message={error} />}
         </Box>
         <Box>
-            <WatchedSummary watched={watched} />
-            <WatchedMoviesList watched={watched} />
+            {
+              selectedId ? <MovieDetails selectedId={selectedId} onCloseMovie={handleCloseMovie} /> :
+             <>
+              <WatchedSummary watched={watched} />
+              <WatchedMoviesList watched={watched} />
+             </>
+            }
         </Box>
       </Main>
     </>
   );
+}
+
+function Loader() {
+  return <p className="loader">Loading...</p>
+}
+
+function ErrorMessage({message}) {
+  return <p className="error">
+    <span>⛔️</span>{message}
+  </p>
 }
 
 function NavBar({children}) {
@@ -99,9 +170,7 @@ function Logo() {
   )
 }
 
-function Search() {
-  const [query, setQuery] = useState("");
-
+function Search({query, setQuery}) {
   return (
     <input
       className="search"
@@ -161,19 +230,19 @@ function Box({children}) {
 //   )
 // }
 
-function MovieList({movies}) {
+function MovieList({movies, onSelectMovie}) {
   return (
-    <ul className="list">
+    <ul className="list list-movies">
       {movies?.map((movie) => (
-        <Movie key={movie.imdbID} movie={movie} />
+        <Movie onSelectMovie={onSelectMovie} key={movie.imdbID} movie={movie} />
       ))}
     </ul>
   )
 }
 
-function Movie({movie}) {
+function Movie({movie, onSelectMovie}) {
   return (
-    <li>
+    <li onClick={() => onSelectMovie(movie.imdbID)}>
       <img src={movie.Poster} alt={`${movie.Title} poster`} />
       <h3>{movie.Title}</h3>
       <div>
@@ -184,6 +253,13 @@ function Movie({movie}) {
       </div>
     </li>
   )
+}
+
+function MovieDetails({selectedId, onCloseMovie}) {
+  return <div className="details">
+    <button className="btn-back" onClick={onCloseMovie}>&larr;</button>
+    {selectedId}
+  </div>
 }
 
 function WatchedSummary({watched}) {
